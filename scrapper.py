@@ -1,32 +1,9 @@
 import requests
 from bs4 import BeautifulSoup
-# import pandas as pd
-# import datetime
-# from concurrent.futures import ProcessPoolExecutor, as_completed
-# import time
 from time import sleep
-
-# base_url = 'http://www.szse.cn/application/search/index.html?keyword=%20签%20战略%20合作%20协议&r=1605350122601'
-# headers = {
-#     'user-agent': 
-#     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.102 Safari/537.36'
-#     }
-
-# url = base_url
-# response = requests.get(url=url, headers=self.headers)
-# sleep(5)
-# soup = BeautifulSoup(response.content, 'html.parser')
-    
-# element = soup.find('li', attrs={'data-id': 'disclosure', 'data-level': '2'})
-
-
-
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
-from time import sleep
-# from utils import print, check_clicks, get_cookies_dir, get_url, cleanup_cookies
 from selenium.webdriver import ActionChains
-# import os, json,
 
 def create_driver():
 
@@ -38,14 +15,6 @@ def create_driver():
         options.add_argument('--no-sandbox')
         options.add_argument("--start-maximized")
         options.add_argument("user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36")
-
-        # Get rid of save password dialog
-        # options.add_experimental_option('prefs', {
-        #     'credentials_enable_service': False,
-        #     'profile': {
-        #         'password_manager_enabled': False
-        #     }
-        # })
 
         while True:
             print('Trying to obtain the driver')
@@ -68,37 +37,102 @@ def create_driver():
     driver.set_page_load_timeout(120)
     return driver
 
-from selenium.webdriver import ActionChains
-
+# go to the page
 driver = create_driver()
 url = 'http://www.szse.cn/application/search/index.html?keyword=%20签%20战略%20合作%20协议&r=1605350122601'
 driver.get(url)
 sleep(15)
 
+# click buttons
 try:
     btn = driver.find_element_by_xpath("//span[@class='text ellipsis' and contains(text(), '信息披露')]")
     ActionChains(driver).move_to_element(btn).double_click(btn).perform()
-except:
-    print("Fail 1")
-sleep(5)
+except Exception as e:
+    print(f"Fail 1, {e}")
+sleep(3)
 try:
     btn = driver.find_element_by_xpath("//span[@class='text ellipsis' and contains(text(), '上市公司信息')]")
     ActionChains(driver).move_to_element(btn).double_click(btn).perform()
-except:
-    print("Fail 2")
-sleep(5)
+except Exception as e:
+    print(f"Fail 2, {e}")
+sleep(3)
 try:
     btn = driver.find_element_by_xpath("//span[@class='text ellipsis' and contains(text(), '公告信息')]")
     ActionChains(driver).move_to_element(btn).click(btn).perform()
-except:
-    print("Fail 3")
+except Exception as e:
+    print(f"Fail 3, {e}")
 
-soup = BeautifulSoup(driver.page_source, "html.parser")
-items = soup.find("div", {"class":"article-search-result"}).find_all("div", {"class":"article-item index-length2"})
+def save_pdf_urls(pdf_url):
+    file_path = '/tmp/szes_pdfs'
+    # if not os.path.exists(file_path):
+    #     os.mkdir(file_path)
+    with open(f"{file_path}.txt", "w") as file:
+        file.write(pdf_url+"\n")
 
-for item in items[:3]:
-    a = item.find('a', {"class":"text ellipsis pdf"}, href=True)
-    print("Found the URL:", a['href'])
+# get pdf urls of this page
+def get_pdf_path(soup):
+    try:
+        items = soup.find("div", {"class":"article-search-result"}).find_all("div", {"class":"article-item index-length2"})
+        for item in items[:2]:
+            article_index = item.find('span', {"class":"artcile-index"}).text.strip()
+            print(article_index)
+
+            a = item.find('a', {"class":"text ellipsis pdf"}, href=True)
+            pdf_url = a['href']
+            title = a.text.strip()
+            print(pdf_url)
+            print(title)
+
+            # TODO: we need the company code
+            # https://stackoverflow.com/questions/48600143/find-number-after-a-substring-in-string/48600278
+            company_code = item.find('p', {"class":"item-content ellipsis"}).text
+
+            date = item.find('span', {"class":"pull-right"})
+            print(date.text)
+            print(f"Found: {pdf_url}")
+
+    except Exception as e:
+        print(f"Fail 5, can't get pdf url. {e}")
+        return False
+    return True
+
+# go through each page for getting pdf urls
+total_page = 2
+bookmark_page = 0 # we need to reocrd which page we have been in case the process break up
+for page in range(total_page):
+    bookmark_page = page + 1
+    soup = BeautifulSoup(driver.page_source, "html.parser")
+    done = get_pdf_path(soup)
+
+    if done:
+        try:
+            btn = driver.find_element_by_xpath("//li[@class='next' and @data-show='next']")
+            ActionChains(driver).move_to_element(btn).click(btn).perform()
+        except Exception as e:
+            print(f"Fail 4, can not move to next page. current page {bookmark_page}, {e}")
+            sleep(2)
+            try:
+                btn = driver.find_element_by_xpath("//a[@data-pi='3' and contains(text(), '下一页')]")
+                ActionChains(driver).move_to_element(btn).click(btn).perform()
+            except Exception as e:
+                print(f"Fail 4, can not move to next page. current page {bookmark_page}, {e}")
+                sleep(2)
+    else:
+        print(f"Page {bookmark_page} is not completed.")
+
+# { 
+#     "01":
+#     {
+#         "title": "company_code_2020-11-09_佳云科技：关于与原战略投资者签署战略合作协议之终止协议及认购协议之终止协议的公告",
+#         "pdf": "http://disc.static.szse.cn/download/disc/disk02/finalpage/2020-11-09/c5ff1165-c0e2-4d53-b3cc-900b3b62b76e.PDF"
+#     },
+#     "02":
+#     {
+#         "title": "company_code_2020-11-09_佳云科技：关于与原战略投资者签署战略合作协议之终止协议及认购协议之终止协议的公告",
+#         "pdf": "http://disc.static.szse.cn/download/disc/disk02/finalpage/2020-11-09/c5ff1165-c0e2-4d53-b3cc-900b3b62b76e.PDF"
+#     },
+# }
+
 
 sleep(500)
 driver.quit()
