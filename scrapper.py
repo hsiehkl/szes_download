@@ -37,11 +37,18 @@ def create_driver():
     driver.set_page_load_timeout(120)
     return driver
 
-# go to the page
-driver = create_driver()
-url = 'http://www.szse.cn/application/search/index.html?keyword=%20签%20战略%20合作%20协议&r=1605350122601'
-driver.get(url)
-sleep(15)
+# we retry for 3 times
+for i in range(3):
+    try:
+        # go to the page
+        driver = create_driver()
+        url = 'http://www.szse.cn/application/search/index.html?keyword=%20签%20战略%20合作%20协议&r=1605350122601'
+        driver.get(url)
+        sleep(15)
+        break
+    except Exception as e:
+        driver.quit()
+        print(f"Fail to get the page. {e}")
 
 # click buttons
 try:
@@ -101,24 +108,22 @@ total_page = 2
 bookmark_page = 0 # we need to reocrd which page we have been in case the process break up
 for page in range(total_page):
     bookmark_page = page + 1
+    print(f"===== {bookmark_page} =====")
     soup = BeautifulSoup(driver.page_source, "html.parser")
     done = get_pdf_path(soup)
 
     if done:
         try:
-            btn = driver.find_element_by_xpath("//li[@class='next' and @data-show='next']")
+            print("XXX-1")
+            btn = driver.find_element_by_xpath("//li[@class='next' and @data-show='next']//a")
             ActionChains(driver).move_to_element(btn).click(btn).perform()
+            sleep(10)
+            print("XXX-2")
         except Exception as e:
             print(f"Fail 4, can not move to next page. current page {bookmark_page}, {e}")
-            sleep(2)
-            try:
-                btn = driver.find_element_by_xpath("//a[@data-pi='3' and contains(text(), '下一页')]")
-                ActionChains(driver).move_to_element(btn).click(btn).perform()
-            except Exception as e:
-                print(f"Fail 4, can not move to next page. current page {bookmark_page}, {e}")
-                sleep(2)
     else:
         print(f"Page {bookmark_page} is not completed.")
+        break
 
 # { 
 #     "01":
@@ -132,7 +137,6 @@ for page in range(total_page):
 #         "pdf": "http://disc.static.szse.cn/download/disc/disk02/finalpage/2020-11-09/c5ff1165-c0e2-4d53-b3cc-900b3b62b76e.PDF"
 #     },
 # }
-
 
 sleep(500)
 driver.quit()
